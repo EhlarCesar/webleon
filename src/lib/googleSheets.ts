@@ -2,7 +2,7 @@ export interface SheetProductRow {
   id: string;
   rowIndex: number; // 0-based index in the Google Sheet
   name: string;
-  image: string;
+  images: string[];
   description: string;
 }
 
@@ -73,6 +73,24 @@ export function normalizeSheetImageUrl(rawValue: string): string {
   return '';
 }
 
+export function parseCellImages(rawCell: string): string[] {
+  const trimmed = rawCell.trim();
+  if (!trimmed) return [];
+
+  // If a cell contains a formula like =IMAGE(...) treat it as a single item first
+  if (/^=\s*(IMAGE|HYPERLINK)\s*\(/i.test(trimmed)) {
+    const single = normalizeSheetImageUrl(trimmed);
+    return single ? [single] : [];
+  }
+
+  // Otherwise support multiple URLs separated by pipe (|), newline, semicolon, comma, or whitespace
+  return trimmed
+    .split(/[\s|;\n,]+/)
+    .map((part) => normalizeSheetImageUrl(part))
+    .filter((url, idx, arr) => url.length > 0 && arr.indexOf(url) === idx)
+    .slice(0, 2);
+}
+
 function parseRowsToProducts(rows: unknown[][]): SheetProductRow[] {
   if (rows.length === 0) return [];
 
@@ -80,10 +98,14 @@ function parseRowsToProducts(rows: unknown[][]): SheetProductRow[] {
 
   const imageHeaderIdx = firstRow.findIndex(
     (h) =>
-      /^(imagen|image|foto|photo|img|url|link)$/.test(h) ||
-      h.includes('imagen') ||
-      h.includes('foto') ||
-      h.includes('image')
+      /^(imagen|imagen\s*1|image|image\s*1|foto|foto\s*1|photo|img|url|link)$/.test(h) ||
+      ((h.includes('imagen') || h.includes('foto') || h.includes('image')) && !h.includes('2'))
+  );
+
+  const image2HeaderIdx = firstRow.findIndex(
+    (h) =>
+      /^(imagen\s*2|image\s*2|foto\s*2|photo\s*2|img\s*2|url\s*2)$/.test(h) ||
+      ((h.includes('imagen') || h.includes('foto') || h.includes('image')) && h.includes('2'))
   );
 
   const nameHeaderIdx = firstRow.findIndex(
@@ -103,10 +125,12 @@ function parseRowsToProducts(rows: unknown[][]): SheetProductRow[] {
       h.includes('detalle')
   );
 
-  const hasHeaderRow = imageHeaderIdx !== -1 || nameHeaderIdx !== -1 || descHeaderIdx !== -1;
+  const hasHeaderRow =
+    imageHeaderIdx !== -1 || image2HeaderIdx !== -1 || nameHeaderIdx !== -1 || descHeaderIdx !== -1;
   const maxCols = rows.reduce((max, r) => (Array.isArray(r) ? Math.max(max, r.length) : max), 0);
 
   const imgCol = imageHeaderIdx !== -1 ? imageHeaderIdx : 0;
+  const img2Col = image2HeaderIdx;
   let nameCol = nameHeaderIdx;
   let descCol = descHeaderIdx;
 
@@ -119,11 +143,15 @@ function parseRowsToProducts(rows: unknown[][]): SheetProductRow[] {
     }
   } else if (nameCol === -1) {
     if (maxCols >= 3) {
-      const candidate = [0, 1, 2].find((idx) => idx !== imgCol && idx !== descCol);
+      const candidate = [0, 1, 2, 3].find(
+        (idx) => idx !== imgCol && idx !== img2Col && idx !== descCol
+      );
       if (candidate !== undefined) nameCol = candidate;
     }
   } else if (descCol === -1) {
-    const candidate = [0, 1, 2].find((idx) => idx !== imgCol && idx !== nameCol);
+    const candidate = [0, 1, 2, 3].find(
+      (idx) => idx !== imgCol && idx !== img2Col && idx !== nameCol
+    );
     if (candidate !== undefined) descCol = candidate;
   }
 
@@ -134,19 +162,40 @@ function parseRowsToProducts(rows: unknown[][]): SheetProductRow[] {
     const row = rows[i];
     if (!Array.isArray(row)) continue;
 
-    const rawImg = String(row[imgCol] ?? '').trim();
+    const rawImg1 = String(row[imgCol] ?? '').trim();
+    const rawImg2 = img2Col !== -1 ? String(row[img2Col] ?? '').trim() : '';
     const rawName = nameCol !== -1 ? String(row[nameCol] ?? '').trim() : '';
     const rawDesc = descCol !== -1 ? String(row[descCol] ?? '').trim() : '';
 
-    let resolvedImg = normalizeSheetImageUrl(rawImg);
+    let resolvedImages = [
+      ...parseCellImages(rawImg1),
+      ...parseCellImages(rawImg2),
+    ]
+      .filter((url, idx, arr) => arr.indexOf(url) === idx)
+      .slice(0, 2);
+
+    // If sheet has a 2nd image in an unlabeled extra column, pick it up too
+    if (resolvedImages.length === 1 && row.length > 3) {
+      for (let c = 0; c < row.length; c++) {
+        if (c === imgCol || c === img2Col || c === nameCol || c === descCol) continue;
+        const extra = parseCellImages(String(row[c] ?? ''));
+        if (extra.length > 0) {
+          resolvedImages = [...resolvedImages, ...extra]
+            .filter((url, idx, arr) => arr.indexOf(url) === idx)
+            .slice(0, 2);
+          if (resolvedImages.length >= 2) break;
+        }
+      }
+    }
+
     let resolvedName = rawName;
     let resolvedDesc = rawDesc;
 
-    if (!resolvedImg) {
+    if (resolvedImages.length === 0) {
       for (let c = 0; c < row.length; c++) {
-        const candidate = normalizeSheetImageUrl(String(row[c] ?? ''));
-        if (candidate) {
-          resolvedImg = candidate;
+        const candidates = parseCellImages(String(row[c] ?? ''));
+        if (candidates.length > 0) {
+          resolvedImages = candidates;
           const remaining = row
             .map((cell, idx) => (idx === c ? '' : String(cell ?? '').trim()))
             .filter(Boolean);
@@ -161,14 +210,14 @@ function parseRowsToProducts(rows: unknown[][]): SheetProductRow[] {
       }
     }
 
-    if (!resolvedImg && !resolvedName && !resolvedDesc) continue;
+    if (resolvedImages.length === 0 && !resolvedName && !resolvedDesc) continue;
 
     parsed.push({
       id: `sheet-row-${i + 1}`,
       rowIndex: i,
       name: resolvedName || `Prenda ${parsed.length + 1}`,
-      image: resolvedImg,
-      description: resolvedDesc || 'Disponible por mayor y menor. Envíos a todo el país.',
+      images: resolvedImages,
+      description: resolvedDesc || 'Indumentaria Masculina y Femenina · Envíos a domicilio.',
     });
   }
 
@@ -305,7 +354,6 @@ export async function createCatalogSpreadsheet(
     title: String(firstSheet?.title ?? 'Prendas'),
   };
 
-  // Write the 3 column headers: Imagen | Título | Descripción
   await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
       spreadsheetId
@@ -322,7 +370,6 @@ export async function createCatalogSpreadsheet(
     }
   );
 
-  // Make the newly created catalog spreadsheet readable by visitors opening the store link
   try {
     await makeDriveFilePublicReadable(spreadsheetId, accessToken);
   } catch {
@@ -384,19 +431,22 @@ export async function appendSheetProduct(
   spreadsheetId: string,
   sheetTitle: string,
   accessToken: string,
-  product: { image: string; name: string; description: string }
+  product: { images: string[]; name: string; description: string }
 ): Promise<void> {
-  // Read first row to respect custom column order if headers exist
+  const cleanImages = product.images.filter(Boolean).slice(0, 2);
+  const combinedImagesValue = cleanImages.join(' | ');
+
   const headerRes = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
       spreadsheetId
-    )}/values/${encodeURIComponent(`'${sheetTitle.replace(/'/g, "''")}'!A1:C1`)}`,
+    )}/values/${encodeURIComponent(`'${sheetTitle.replace(/'/g, "''")}'!A1:D1`)}`,
     {
       headers: { Authorization: `Bearer ${accessToken}` },
     }
   );
 
-  let rowValues = [product.image, product.name, product.description];
+  let rowValues = [combinedImagesValue, product.name, product.description];
+  let targetRange = `'${sheetTitle.replace(/'/g, "''")}'!A:C`;
 
   if (headerRes.ok) {
     const headerData = await headerRes.json();
@@ -405,7 +455,6 @@ export async function appendSheetProduct(
       : [];
 
     if (firstRow.length === 0) {
-      // Empty sheet: seed headers first
       await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
           spreadsheetId
@@ -423,18 +472,35 @@ export async function appendSheetProduct(
       );
     } else {
       const imgIdx = firstRow.findIndex(
-        (h) => h.includes('imagen') || h.includes('foto') || h.includes('image') || h === 'url'
+        (h) =>
+          (h.includes('imagen') || h.includes('foto') || h.includes('image') || h === 'url') &&
+          !h.includes('2')
+      );
+      const img2Idx = firstRow.findIndex(
+        (h) =>
+          (h.includes('imagen') || h.includes('foto') || h.includes('image')) && h.includes('2')
       );
       const nameIdx = firstRow.findIndex(
-        (h) => h.includes('nombre') || h.includes('titulo') || h.includes('título') || h.includes('producto')
+        (h) =>
+          h.includes('nombre') ||
+          h.includes('titulo') ||
+          h.includes('título') ||
+          h.includes('producto')
       );
       const descIdx = firstRow.findIndex(
         (h) => h.includes('descrip') || h.includes('detalle')
       );
 
       if (imgIdx !== -1 && nameIdx !== -1 && descIdx !== -1) {
-        const mapped = ['', '', ''];
-        mapped[imgIdx] = product.image;
+        const colCount = Math.max(3, imgIdx + 1, img2Idx + 1, nameIdx + 1, descIdx + 1);
+        const mapped = Array(colCount).fill('');
+        if (img2Idx !== -1) {
+          mapped[imgIdx] = cleanImages[0] ?? '';
+          mapped[img2Idx] = cleanImages[1] ?? '';
+          targetRange = `'${sheetTitle.replace(/'/g, "''")}'!A:D`;
+        } else {
+          mapped[imgIdx] = combinedImagesValue;
+        }
         mapped[nameIdx] = product.name;
         mapped[descIdx] = product.description;
         rowValues = mapped;
@@ -442,11 +508,10 @@ export async function appendSheetProduct(
     }
   }
 
-  const range = `'${sheetTitle.replace(/'/g, "''")}'!A:C`;
   const appendRes = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
       spreadsheetId
-    )}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    )}/values/${encodeURIComponent(targetRange)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     {
       method: 'POST',
       headers: {

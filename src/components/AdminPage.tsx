@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import {
   AlertCircle,
   Check,
@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Trash2,
   Upload,
+  X,
 } from 'lucide-react';
 import type { User } from 'firebase/auth';
 import {
@@ -39,6 +40,7 @@ import {
 } from '../data/products';
 import { GoogleSignInButton } from './GoogleSignInButton';
 import { ConfirmActionModal } from './ConfirmActionModal';
+import { SwipeableProductGallery } from './ProductCard';
 
 interface AdminPageProps {
   onSyncProducts: (products: ClothingProduct[], sourceLabel: string, spreadsheetId: string, tabTitle: string) => void;
@@ -49,7 +51,15 @@ const STORAGE_SHEET_URL_KEY = 'leon_sheet_url';
 const STORAGE_SHEET_TAB_KEY = 'leon_sheet_tab';
 
 type PendingMutation =
-  | { type: 'add'; title: string; description: string; imageFile: File | null; imageUrl: string }
+  | {
+      type: 'add';
+      title: string;
+      description: string;
+      image1File: File | null;
+      image1Url: string;
+      image2File: File | null;
+      image2Url: string;
+    }
   | { type: 'delete'; item: SheetProductRow }
   | null;
 
@@ -84,12 +94,19 @@ export function AdminPage({ onSyncProducts, onGoToStorefront }: AdminPageProps) 
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [copiedClientLink, setCopiedClientLink] = useState(false);
 
-  // New card form state
+  // New card form state (1 or 2 images)
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
-  const [newImageUrl, setNewImageUrl] = useState('');
-  const [newImageFile, setNewImageFile] = useState<File | null>(null);
-  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
+  const [newImage1Url, setNewImage1Url] = useState('');
+  const [newImage1File, setNewImage1File] = useState<File | null>(null);
+  const [file1PreviewUrl, setFile1PreviewUrl] = useState<string | null>(null);
+
+  const [newImage2Url, setNewImage2Url] = useState('');
+  const [newImage2File, setNewImage2File] = useState<File | null>(null);
+  const [file2PreviewUrl, setFile2PreviewUrl] = useState<string | null>(null);
+
+  const file1InputRef = useRef<HTMLInputElement>(null);
+  const file2InputRef = useRef<HTMLInputElement>(null);
 
   // Explicit confirmation modal state (mandatory before any Workspace mutation)
   const [pendingMutation, setPendingMutation] = useState<PendingMutation>(null);
@@ -111,11 +128,19 @@ export function AdminPage({ onSyncProducts, onGoToStorefront }: AdminPageProps) 
 
   useEffect(() => {
     return () => {
-      if (filePreviewUrl) {
-        URL.revokeObjectURL(filePreviewUrl);
+      if (file1PreviewUrl) {
+        URL.revokeObjectURL(file1PreviewUrl);
       }
     };
-  }, [filePreviewUrl]);
+  }, [file1PreviewUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (file2PreviewUrl) {
+        URL.revokeObjectURL(file2PreviewUrl);
+      }
+    };
+  }, [file2PreviewUrl]);
 
   const loadSheetData = useCallback(
     async (explicitInput?: string, explicitTab?: string) => {
@@ -158,7 +183,7 @@ export function AdminPage({ onSyncProducts, onGoToStorefront }: AdminPageProps) 
         const rows = await fetchSheetProducts(spreadsheetId, matchedTab.title, token);
         setSheetRows(rows);
         onSyncProducts(
-          rows.map(({ id, name, image, description }) => ({ id, name, image, description })),
+          rows.map(({ id, name, images, description }) => ({ id, name, images, description })),
           `${meta.title} · ${matchedTab.title}`,
           spreadsheetId,
           matchedTab.title
@@ -237,18 +262,58 @@ export function AdminPage({ onSyncProducts, onGoToStorefront }: AdminPageProps) 
     }
   };
 
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleFile1Change = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    const file1 = files?.[0] || null;
+    const file2 = files?.[1] || null;
+
+    if (file1PreviewUrl) {
+      URL.revokeObjectURL(file1PreviewUrl);
+    }
+    if (file1) {
+      setNewImage1File(file1);
+      setFile1PreviewUrl(URL.createObjectURL(file1));
+      setNewImage1Url('');
+    } else {
+      setNewImage1File(null);
+      setFile1PreviewUrl(null);
+    }
+
+    // If user selected 2 files at once, populate Imagen 2 automatically as well
+    if (file2) {
+      if (file2PreviewUrl) {
+        URL.revokeObjectURL(file2PreviewUrl);
+      }
+      setNewImage2File(file2);
+      setFile2PreviewUrl(URL.createObjectURL(file2));
+      setNewImage2Url('');
+    }
+  };
+
+  const handleFile2Change = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] || null;
-    if (filePreviewUrl) {
-      URL.revokeObjectURL(filePreviewUrl);
+    if (file2PreviewUrl) {
+      URL.revokeObjectURL(file2PreviewUrl);
     }
     if (file) {
-      setNewImageFile(file);
-      setFilePreviewUrl(URL.createObjectURL(file));
-      setNewImageUrl('');
+      setNewImage2File(file);
+      setFile2PreviewUrl(URL.createObjectURL(file));
+      setNewImage2Url('');
     } else {
-      setNewImageFile(null);
-      setFilePreviewUrl(null);
+      setNewImage2File(null);
+      setFile2PreviewUrl(null);
+    }
+  };
+
+  const handleClearImage2 = () => {
+    setNewImage2Url('');
+    setNewImage2File(null);
+    if (file2PreviewUrl) {
+      URL.revokeObjectURL(file2PreviewUrl);
+      setFile2PreviewUrl(null);
+    }
+    if (file2InputRef.current) {
+      file2InputRef.current.value = '';
     }
   };
 
@@ -273,9 +338,15 @@ export function AdminPage({ onSyncProducts, onGoToStorefront }: AdminPageProps) 
       return;
     }
 
-    const normalizedUrl = newImageUrl.trim() ? normalizeSheetImageUrl(newImageUrl) : '';
-    if (!newImageFile && !normalizedUrl) {
-      setErrorMsg('Subí una foto de la prenda o pegá un enlace válido de imagen.');
+    const normalizedUrl1 = newImage1Url.trim() ? normalizeSheetImageUrl(newImage1Url) : '';
+    if (!newImage1File && !normalizedUrl1) {
+      setErrorMsg('Subí al menos 1 foto (Imagen 1) o pegá un enlace válido de imagen.');
+      return;
+    }
+
+    const normalizedUrl2 = newImage2Url.trim() ? normalizeSheetImageUrl(newImage2Url) : '';
+    if (newImage2Url.trim() && !newImage2File && !normalizedUrl2) {
+      setErrorMsg('El enlace ingresado para la Imagen 2 no es válido.');
       return;
     }
 
@@ -283,8 +354,10 @@ export function AdminPage({ onSyncProducts, onGoToStorefront }: AdminPageProps) 
       type: 'add',
       title: newTitle.trim(),
       description: newDescription.trim(),
-      imageFile: newImageFile,
-      imageUrl: normalizedUrl,
+      image1File: newImage1File,
+      image1Url: normalizedUrl1,
+      image2File: newImage2File,
+      image2Url: normalizedUrl2,
     });
   };
 
@@ -305,24 +378,43 @@ export function AdminPage({ onSyncProducts, onGoToStorefront }: AdminPageProps) 
 
     try {
       if (pendingMutation.type === 'add') {
-        let finalImageUrl = pendingMutation.imageUrl;
-        if (pendingMutation.imageFile) {
-          finalImageUrl = await uploadImageToDrive(pendingMutation.imageFile, token);
+        let finalImg1 = pendingMutation.image1Url;
+        if (pendingMutation.image1File) {
+          finalImg1 = await uploadImageToDrive(pendingMutation.image1File, token);
         }
 
+        let finalImg2 = pendingMutation.image2Url;
+        if (pendingMutation.image2File) {
+          finalImg2 = await uploadImageToDrive(pendingMutation.image2File, token);
+        }
+
+        const images = [finalImg1, finalImg2].filter(Boolean);
+
         await appendSheetProduct(spreadsheetId, selectedTabTitle, token, {
-          image: finalImageUrl,
+          images,
           name: pendingMutation.title,
           description: pendingMutation.description,
         });
 
         setNewTitle('');
         setNewDescription('');
-        setNewImageUrl('');
-        setNewImageFile(null);
-        if (filePreviewUrl) {
-          URL.revokeObjectURL(filePreviewUrl);
-          setFilePreviewUrl(null);
+        setNewImage1Url('');
+        setNewImage1File(null);
+        if (file1PreviewUrl) {
+          URL.revokeObjectURL(file1PreviewUrl);
+          setFile1PreviewUrl(null);
+        }
+        if (file1InputRef.current) {
+          file1InputRef.current.value = '';
+        }
+        setNewImage2Url('');
+        setNewImage2File(null);
+        if (file2PreviewUrl) {
+          URL.revokeObjectURL(file2PreviewUrl);
+          setFile2PreviewUrl(null);
+        }
+        if (file2InputRef.current) {
+          file2InputRef.current.value = '';
         }
 
         await loadSheetData(spreadsheetId, selectedTabTitle);
@@ -377,8 +469,12 @@ export function AdminPage({ onSyncProducts, onGoToStorefront }: AdminPageProps) 
     }
   };
 
-  const previewImgSrc =
-    filePreviewUrl || (newImageUrl.trim() ? normalizeSheetImageUrl(newImageUrl) : '');
+  const previewImg1Src =
+    file1PreviewUrl || (newImage1Url.trim() ? normalizeSheetImageUrl(newImage1Url) : '');
+  const previewImg2Src =
+    file2PreviewUrl || (newImage2Url.trim() ? normalizeSheetImageUrl(newImage2Url) : '');
+  const previewImages = [previewImg1Src, previewImg2Src].filter(Boolean);
+  const hasImage2 = Boolean(newImage2File || newImage2Url.trim());
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#0B0C0F] text-[#F3F4F6]">
@@ -613,61 +709,179 @@ export function AdminPage({ onSyncProducts, onGoToStorefront }: AdminPageProps) 
                   Subir nuevo Card a la web de León
                 </h2>
                 <p className="mt-1 text-xs text-zinc-400">
-                  Subí la foto desde tu celular o PC (se guarda en tu Drive) o pegá un link de
-                  imagen, escribí el título y la descripción.
+                  Podés subir 1 o 2 fotos por prenda (se guardan en tu Drive) o pegar enlaces de
+                  imagen. Si cargás 2 fotos, tus clientes podrán deslizarlas con la mano en el Card.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label
-                    htmlFor="card-photo-file"
-                    className="block text-xs font-medium text-zinc-300 mb-1.5"
-                  >
-                    Subir foto de la prenda
-                  </label>
-                  <label
-                    htmlFor="card-photo-file"
-                    className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-white/25 bg-[#0B0C0F] px-4 py-3 text-xs font-medium text-zinc-200 transition-colors hover:border-white/45 hover:text-white"
-                  >
-                    <ImagePlus className="h-4 w-4 shrink-0" aria-hidden="true" />
-                    <span className="truncate">
-                      {newImageFile ? newImageFile.name : 'Elegir imagen desde dispositivo'}
+              {/* Imagen 1 (obligatoria) */}
+              <div className="rounded-xl border border-white/10 bg-[#0B0C0F]/60 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="block text-xs font-semibold uppercase tracking-[0.12em] text-zinc-200">
+                    Imagen 1 (Principal · obligatoria)
+                  </span>
+                  {previewImg1Src && (
+                    <span className="text-[11px] font-medium text-emerald-400">
+                      Foto 1 cargada
                     </span>
-                    <input
-                      id="card-photo-file"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileChange}
-                      className="sr-only"
-                    />
-                  </label>
+                  )}
                 </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label
+                      htmlFor="card-photo-file-1"
+                      className="block text-xs font-medium text-zinc-400 mb-1.5"
+                    >
+                      Subir foto 1 (o elegir 2 juntas)
+                    </label>
+                    <label
+                      htmlFor="card-photo-file-1"
+                      className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-white/25 bg-[#0B0C0F] px-4 py-3 text-xs font-medium text-zinc-200 transition-colors hover:border-white/45 hover:text-white"
+                    >
+                      {previewImg1Src ? (
+                        <img
+                          src={previewImg1Src}
+                          alt="Miniatura foto 1"
+                          referrerPolicy="no-referrer"
+                          className="h-7 w-7 rounded object-cover shrink-0"
+                        />
+                      ) : (
+                        <ImagePlus className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      )}
+                      <span className="truncate">
+                        {newImage1File ? newImage1File.name : 'Elegir 1 o 2 imágenes'}
+                      </span>
+                      <input
+                        ref={file1InputRef}
+                        id="card-photo-file-1"
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleFile1Change}
+                        className="sr-only"
+                      />
+                    </label>
+                  </div>
 
-                <div>
-                  <label
-                    htmlFor="card-photo-url"
-                    className="block text-xs font-medium text-zinc-300 mb-1.5"
-                  >
-                    O pegar enlace de imagen
-                  </label>
-                  <input
-                    id="card-photo-url"
-                    type="text"
-                    value={newImageUrl}
-                    onChange={(e) => {
-                      setNewImageUrl(e.target.value);
-                      if (e.target.value.trim() && newImageFile) {
-                        setNewImageFile(null);
-                        if (filePreviewUrl) {
-                          URL.revokeObjectURL(filePreviewUrl);
-                          setFilePreviewUrl(null);
+                  <div>
+                    <label
+                      htmlFor="card-photo-url-1"
+                      className="block text-xs font-medium text-zinc-400 mb-1.5"
+                    >
+                      O pegar enlace de imagen 1
+                    </label>
+                    <input
+                      id="card-photo-url-1"
+                      type="text"
+                      value={newImage1Url}
+                      onChange={(e) => {
+                        setNewImage1Url(e.target.value);
+                        if (e.target.value.trim() && newImage1File) {
+                          setNewImage1File(null);
+                          if (file1PreviewUrl) {
+                            URL.revokeObjectURL(file1PreviewUrl);
+                            setFile1PreviewUrl(null);
+                          }
+                          if (file1InputRef.current) {
+                            file1InputRef.current.value = '';
+                          }
                         }
-                      }
-                    }}
-                    placeholder="https://... o enlace de Drive"
-                    className="w-full rounded-lg border border-white/15 bg-[#0B0C0F] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:border-white/40 focus:outline-none"
-                  />
+                      }}
+                      placeholder="https://... o enlace de Drive"
+                      className="w-full rounded-lg border border-white/15 bg-[#0B0C0F] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:border-white/40 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Imagen 2 (opcional) */}
+              <div className="rounded-xl border border-white/10 bg-[#0B0C0F]/60 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-300">
+                      Imagen 2 (Opcional · deslizable con la mano)
+                    </span>
+                    {previewImg2Src && (
+                      <span className="text-[11px] font-medium text-emerald-400">
+                        Foto 2 cargada
+                      </span>
+                    )}
+                  </div>
+                  {hasImage2 && (
+                    <button
+                      type="button"
+                      onClick={handleClearImage2}
+                      className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-white transition-colors"
+                    >
+                      <X className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>Quitar foto 2</span>
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label
+                      htmlFor="card-photo-file-2"
+                      className="block text-xs font-medium text-zinc-400 mb-1.5"
+                    >
+                      Subir foto 2 desde dispositivo
+                    </label>
+                    <label
+                      htmlFor="card-photo-file-2"
+                      className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-white/25 bg-[#0B0C0F] px-4 py-3 text-xs font-medium text-zinc-200 transition-colors hover:border-white/45 hover:text-white"
+                    >
+                      {previewImg2Src ? (
+                        <img
+                          src={previewImg2Src}
+                          alt="Miniatura foto 2"
+                          referrerPolicy="no-referrer"
+                          className="h-7 w-7 rounded object-cover shrink-0"
+                        />
+                      ) : (
+                        <ImagePlus className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      )}
+                      <span className="truncate">
+                        {newImage2File ? newImage2File.name : 'Elegir imagen 2 (opcional)'}
+                      </span>
+                      <input
+                        ref={file2InputRef}
+                        id="card-photo-file-2"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFile2Change}
+                        className="sr-only"
+                      />
+                    </label>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="card-photo-url-2"
+                      className="block text-xs font-medium text-zinc-400 mb-1.5"
+                    >
+                      O pegar enlace de imagen 2
+                    </label>
+                    <input
+                      id="card-photo-url-2"
+                      type="text"
+                      value={newImage2Url}
+                      onChange={(e) => {
+                        setNewImage2Url(e.target.value);
+                        if (e.target.value.trim() && newImage2File) {
+                          setNewImage2File(null);
+                          if (file2PreviewUrl) {
+                            URL.revokeObjectURL(file2PreviewUrl);
+                            setFile2PreviewUrl(null);
+                          }
+                          if (file2InputRef.current) {
+                            file2InputRef.current.value = '';
+                          }
+                        }
+                      }}
+                      placeholder="https://... o enlace de Drive"
+                      className="w-full rounded-lg border border-white/15 bg-[#0B0C0F] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:border-white/40 focus:outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -719,23 +933,21 @@ export function AdminPage({ onSyncProducts, onGoToStorefront }: AdminPageProps) 
             {/* Live Card Preview */}
             <div className="lg:col-span-4">
               <p className="mb-3 text-xs uppercase tracking-[0.14em] text-zinc-400">
-                Vista previa del Card
+                Vista previa del Card{previewImages.length > 1 ? ' · Deslizá la foto' : ''}
               </p>
               <div className="flex flex-col justify-between rounded-xl border border-white/10 bg-[#13151A] overflow-hidden">
-                <div className="w-full min-h-[220px] bg-[#181A20] overflow-hidden flex items-center justify-center">
-                  {previewImgSrc ? (
-                    <img
-                      src={previewImgSrc}
-                      alt={newTitle || 'Vista previa'}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-auto max-h-[460px] object-contain"
-                    />
-                  ) : (
+                {previewImages.length > 0 ? (
+                  <SwipeableProductGallery
+                    images={previewImages}
+                    alt={newTitle || 'Vista previa'}
+                  />
+                ) : (
+                  <div className="w-full min-h-[220px] bg-[#181A20] overflow-hidden flex items-center justify-center">
                     <span className="text-xs text-zinc-500 px-6 py-16 text-center">
-                      Acá se verá la imagen de tu prenda
+                      Acá se verán 1 o 2 fotos de tu prenda
                     </span>
-                  )}
-                </div>
+                  </div>
+                )}
                 <div className="p-5 space-y-3">
                   <div>
                     <h3 className="text-base font-semibold text-white">
@@ -794,20 +1006,7 @@ export function AdminPage({ onSyncProducts, onGoToStorefront }: AdminPageProps) 
                     key={`${item.id}-${item.rowIndex}`}
                     className="flex flex-col justify-between rounded-xl border border-white/10 bg-[#13151A] overflow-hidden"
                   >
-                    <div className="w-full bg-[#181A20] overflow-hidden flex items-center justify-center">
-                      {item.image ? (
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          referrerPolicy="no-referrer"
-                          className="w-full h-auto max-h-[460px] object-contain"
-                        />
-                      ) : (
-                        <div className="flex aspect-[3/4] w-full items-center justify-center p-4 text-xs text-zinc-500">
-                          Sin imagen
-                        </div>
-                      )}
-                    </div>
+                    <SwipeableProductGallery images={item.images} alt={item.name} />
 
                     <div className="flex flex-1 flex-col justify-between gap-4 p-5">
                       <div>
@@ -849,7 +1048,11 @@ export function AdminPage({ onSyncProducts, onGoToStorefront }: AdminPageProps) 
             ? `Se eliminará la fila ${pendingMutation.item.rowIndex + 1} de tu planilla "${spreadsheetTitle}" y este Card dejará de mostrarse en la web de León.`
             : pendingMutation?.type === 'add'
             ? `Se agregará una nueva fila en "${spreadsheetTitle}" (${selectedTabTitle})${
-                pendingMutation.imageFile ? ' y se subirá la imagen a tu Google Drive' : ''
+                pendingMutation.image1File && pendingMutation.image2File
+                  ? ' y se subirán las 2 imágenes a tu Google Drive'
+                  : pendingMutation.image1File || pendingMutation.image2File
+                  ? ' y se subirá la imagen a tu Google Drive'
+                  : ''
               }.`
             : ''
         }

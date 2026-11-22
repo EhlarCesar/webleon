@@ -7,6 +7,7 @@ import {
   WHATSAPP_DISPLAY,
   WHATSAPP_SHORT,
   buildWhatsAppUrl,
+  normalizeProductImages,
 } from './data/products';
 import { SplashScreen } from './components/SplashScreen';
 import { ProductCard } from './components/ProductCard';
@@ -32,7 +33,7 @@ function loadCachedProducts(): ClothingProduct[] {
     if (!raw) return DEFAULT_PRODUCTS;
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      return parsed;
+      return normalizeProductImages(parsed);
     }
   } catch {
     // Ignore storage read errors
@@ -94,7 +95,7 @@ export default function App() {
       const rows = await fetchPublicSheetProducts(spreadsheetId, tabParam);
       if (rows.length > 0) {
         setProducts(
-          rows.map(({ id, name, image, description }) => ({ id, name, image, description }))
+          rows.map(({ id, name, images, description }) => ({ id, name, images, description }))
         );
       }
     } catch {
