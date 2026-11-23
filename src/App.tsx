@@ -183,12 +183,6 @@ export default function App() {
               Inicio
             </a>
             <a
-              href="#indumentaria"
-              className="hover:text-white hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
-            >
-              Indumentaria
-            </a>
-            <a
               href="#envios"
               className="hover:text-white hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
             >
@@ -261,23 +255,13 @@ export default function App() {
           </div>
 
           <div
-            id="indumentaria"
-            className="mt-12 grid grid-cols-1 gap-6 border-y border-white/10 py-7 md:grid-cols-2 md:gap-10"
+            id="envios"
+            className="mt-12 border-y border-white/10 py-7"
           >
-            <div>
-              <h2 className="text-sm font-semibold text-white">
-                01. Indumentaria Masculina y Femenina
-              </h2>
-              <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">
-                Abrigos, buzos pesados, sastrería de dama y denim urbano con moldería actual.
-              </p>
-            </div>
-            <div id="envios">
-              <h2 className="text-sm font-semibold text-white">02. Envíos a domicilio</h2>
-              <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">
-                Coordinamos tu despacho o cualquier punto de encuentro.
-              </p>
-            </div>
+            <h2 className="text-sm font-semibold text-white">Envíos a domicilio</h2>
+            <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">
+              Coordinamos tu despacho o cualquier punto de encuentro.
+            </p>
           </div>
         </section>
 

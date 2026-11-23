@@ -15,69 +15,60 @@ export function HeroCarousel() {
 
   return (
     <div
-      className="relative aspect-[4/3] w-full lg:aspect-auto lg:h-full lg:min-h-[430px] overflow-hidden rounded-xl border border-white/10 bg-[#13151A]"
+      className="flex flex-col w-full h-full overflow-hidden rounded-xl border border-white/10 bg-[#13151A]"
       aria-roledescription="carousel"
       aria-label="Galería de Línea Masculina y Femenina"
     >
-      {/* Automatic photo-only carousel transition */}
-      {HERO_CAROUSEL_IMAGES.map((slide, index) => {
-        const isActive = index === activeIndex;
-        const hasFailed = Boolean(failedSlides[index]);
+      {/* Responsive photo-only automatic carousel (adapts cleanly to mobile, tablet & desktop without cropping) */}
+      <div className="relative w-full aspect-[4/5] sm:aspect-square lg:aspect-auto lg:flex-1 lg:min-h-[420px] xl:min-h-[460px] overflow-hidden bg-[#0E1014]">
+        {HERO_CAROUSEL_IMAGES.map((slide, index) => {
+          const isActive = index === activeIndex;
+          const hasFailed = Boolean(failedSlides[index]);
 
-        return (
-          <div
-            key={slide.src}
-            aria-hidden={!isActive}
-            className={`absolute inset-0 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-              isActive
-                ? 'opacity-100 scale-100'
-                : 'opacity-0 scale-[1.03] pointer-events-none'
-            }`}
-          >
-            {!hasFailed ? (
-              <img
-                src={slide.src}
-                alt={slide.alt}
-                referrerPolicy="no-referrer"
-                onError={() =>
-                  setFailedSlides((prev) => ({
-                    ...prev,
-                    [index]: true,
-                  }))
-                }
-                className="h-full w-full object-cover object-center"
-              />
-            ) : (
-              <div className="flex h-full w-full flex-col items-center justify-center p-8 text-center bg-gradient-to-br from-[#181A20] to-[#0B0C0F]">
-                <span className="font-display text-2xl sm:text-3xl text-white">
-                  León Indumentaria
-                </span>
-                <span className="mt-2 text-xs sm:text-sm text-zinc-400">
-                  Indumentaria Masculina y Femenina
-                </span>
-              </div>
-            )}
-          </div>
-        );
-      })}
+          return (
+            <div
+              key={slide.src}
+              aria-hidden={!isActive}
+              className={`absolute inset-0 flex items-center justify-center p-2 sm:p-3 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                isActive
+                  ? 'opacity-100 scale-100'
+                  : 'opacity-0 scale-[1.03] pointer-events-none'
+              }`}
+            >
+              {!hasFailed ? (
+                <img
+                  src={slide.src}
+                  alt={slide.alt}
+                  referrerPolicy="no-referrer"
+                  onError={() =>
+                    setFailedSlides((prev) => ({
+                      ...prev,
+                      [index]: true,
+                    }))
+                  }
+                  className="h-full w-full max-h-full max-w-full object-contain select-none"
+                />
+              ) : (
+                <div className="flex h-full w-full flex-col items-center justify-center p-8 text-center bg-gradient-to-br from-[#181A20] to-[#0B0C0F]">
+                  <span className="font-display text-2xl sm:text-3xl text-white">
+                    León Indumentaria
+                  </span>
+                  <span className="mt-2 text-xs sm:text-sm text-zinc-400">
+                    Indumentaria Masculina y Femenina
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
 
-      {/* Contrast scrim */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-t from-black/80 via-black/15 to-transparent"
-      />
-
-      {/* Fixed card overlay text */}
-      <div className="absolute bottom-4 left-4 right-4 sm:bottom-5 sm:left-5 sm:right-5 z-20 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-[11px] sm:text-xs uppercase tracking-[0.14em] text-zinc-300">
-            Catálogo oficial
-          </p>
-          <p className="mt-1 font-display text-lg sm:text-xl text-white">
-            Línea Masculina &amp; Femenina
-          </p>
-        </div>
-        <span className="text-xs font-medium text-zinc-200">Envíos a domicilio</span>
+      {/* Fixed card bottom strip without "Catálogo oficial" */}
+      <div className="border-t border-white/10 bg-[#13151A] px-4 py-3.5 sm:px-5 sm:py-4 flex flex-wrap items-center justify-between gap-2">
+        <p className="font-display text-base sm:text-lg lg:text-xl text-white">
+          Línea Masculina &amp; Femenina
+        </p>
+        <span className="text-xs font-medium text-zinc-300">Envíos a domicilio</span>
       </div>
     </div>
   );

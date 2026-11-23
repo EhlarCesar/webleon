@@ -14,20 +14,20 @@ export const HERO_IMAGE_PATH = '/src/assets/images/hero_leon_editorial_179529484
 
 export const HERO_CAROUSEL_IMAGES: Array<{ src: string; alt: string }> = [
   {
-    src: '/src/assets/images/hero_leon_editorial_1795294848859.jpg',
-    alt: 'Colección masculina y femenina de León Indumentaria',
+    src: '/assets/aistudio/IMG-20261123-WA0007_83247cf4.jpg',
+    alt: 'León Indumentaria — Comparativa de remeras para estampar DTF 24.1, 20.1 y 16.1',
   },
   {
-    src: '/src/assets/images/hero_leon_urban_duo_1795352226384.jpg',
-    alt: 'Línea urbana masculina y femenina con campera bomber y buzo oversize',
+    src: '/assets/aistudio/IMG-20261123-WA0006_57c460b4.jpg',
+    alt: 'León Indumentaria — Remera versátil algodón peinado 20.1',
   },
   {
-    src: '/src/assets/images/hero_leon_sastreria_1795352226462.jpg',
-    alt: 'Sastrería femenina y abrigo masculino de León Indumentaria',
+    src: '/assets/aistudio/IMG-20261119-WA0027_30a80616.jpg',
+    alt: 'León Indumentaria — Logo oficial',
   },
   {
-    src: '/src/assets/images/hero_leon_denim_collection_1795352226546.jpg',
-    alt: 'Colección denim y prendas urbanas para hombre y mujer',
+    src: '/assets/aistudio/IMG-20261123-WA0005_cbeb2045.jpg',
+    alt: 'León Indumentaria — Remera liviana algodón peinado 24.1',
   },
 ];
 
