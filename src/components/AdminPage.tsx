@@ -50,6 +50,16 @@ interface AdminPageProps {
 const STORAGE_SHEET_URL_KEY = 'leon_sheet_url';
 const STORAGE_SHEET_TAB_KEY = 'leon_sheet_tab';
 
+const AUTHORIZED_ADMIN_EMAILS = new Set([
+  'ehlar.cesar@gmail.com',
+  'alexiscenturion081@gmail.com',
+]);
+
+function isAuthorizedAdmin(email?: string | null): boolean {
+  if (!email) return false;
+  return AUTHORIZED_ADMIN_EMAILS.has(email.trim().toLowerCase());
+}
+
 type PendingMutation =
   | {
       type: 'add';
@@ -115,6 +125,15 @@ export function AdminPage({ onSyncProducts, onGoToStorefront }: AdminPageProps) 
   useEffect(() => {
     const unsubscribe = initAuth(
       (authedUser) => {
+        if (!isAuthorizedAdmin(authedUser.email)) {
+          void logout();
+          setUser(null);
+          setNeedsAuth(true);
+          setErrorMsg(
+            `La cuenta ${authedUser.email || ''} no tiene autorización para ingresar al Administrador.`
+          );
+          return;
+        }
         setUser(authedUser);
         setNeedsAuth(false);
       },
@@ -212,12 +231,27 @@ export function AdminPage({ onSyncProducts, onGoToStorefront }: AdminPageProps) 
     setErrorMsg(null);
     try {
       const result = await googleSignIn();
+      if (!isAuthorizedAdmin(result.user.email)) {
+        await logout();
+        setUser(null);
+        setNeedsAuth(true);
+        setErrorMsg(
+          `La cuenta ${result.user.email || ''} no tiene autorización para ingresar al Administrador.`
+        );
+        return;
+      }
       setUser(result.user);
       setNeedsAuth(false);
     } catch (err) {
-      setErrorMsg(
-        err instanceof Error ? err.message : 'No se pudo iniciar sesión con Google.'
-      );
+      const message =
+        err instanceof Error ? err.message : 'No se pudo iniciar sesión con Google.';
+      if (message.includes('auth/unauthorized-domain')) {
+        setErrorMsg(
+          'Este dominio (por ej. leonedlp.netlify.app) todavía no está autorizado en Firebase Console → Authentication → Settings → Authorized domains.'
+        );
+      } else {
+        setErrorMsg(message);
+      }
     } finally {
       setIsLoggingIn(false);
     }
